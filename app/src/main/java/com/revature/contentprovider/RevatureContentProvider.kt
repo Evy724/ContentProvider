@@ -2,16 +2,16 @@ package com.revature.contentprovider
 
 import android.content.*
 import android.database.Cursor
-import android.database.SQLException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteOpenHelper
+import android.database.sqlite.SQLiteQueryBuilder
 import android.net.Uri
 
 class RevatureContentProvider: ContentProvider() {
 
     companion object {
-        const val DATABASE_NAME = "UserDatabase"
+        const val DATABASE_NAME = "UserDB"
         const val DATABASE_VERSION = 1
         const val TABLE_NAME = "Users"
 
@@ -20,22 +20,24 @@ class RevatureContentProvider: ContentProvider() {
 
         //defining the authority (content URI)
 
-        private const val PROVIDER_NAME = "com.revature.user.provider"
+        const val PROVIDER_NAME = "com.revature.contentprovider.RevatureContentProvider.provider"
 
         //defining the content URI
 
-        private const val URL = "content://$PROVIDER_NAME/users"
+        const val URL = "content://$PROVIDER_NAME/users"
 
         //parsing the content URI
 
         val CONTENT_URI: Uri = Uri.parse(URL)
 
-        private var uriMatcher: UriMatcher? = null
+        var uriMatcher: UriMatcher? = null
+
+        private val values:HashMap<String, String>? = null
 
         //create a table
 
         const val CREATE_DB_TABLE = (
-                "CREATE TABLE"
+                "CREATE TABLE "
                         + TABLE_NAME
                         + "(id INTEGER PRIMARY KEY AUTOINCREMENT,"
                         + "name TEXT NOT NULL);")
@@ -43,7 +45,7 @@ class RevatureContentProvider: ContentProvider() {
         private const val uriCode = 1
         init {
             //to match the content URI
-            uriMatcher = UriMatcher(UriMatcher.NO_MATCH)
+            UriMatcher(UriMatcher.NO_MATCH).also { uriMatcher = it }
 
             //to access the entire table
 
@@ -71,16 +73,35 @@ class RevatureContentProvider: ContentProvider() {
         return db != null
     }
     override fun query(
-        p0: Uri,
-        p1: Array<out String>?,
-        p2: String?,
-        p3: Array<out String>?,
-        p4: String?
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?
     ): Cursor? {
-        TODO("Not yet implemented")
+
+        var sortOrder = sortOrder
+        val qb = SQLiteQueryBuilder()
+        qb.tables = TABLE_NAME
+
+        when(uriMatcher!!.match(uri)) {
+            uriCode -> qb.projectionMap = values
+            else -> throw IllegalArgumentException("Unknown URI $uri")
+
+        }
+        if(sortOrder == null || sortOrder === "") {
+            sortOrder = id
+        }
+        val clone = qb.query(db, projection, selection, selectionArgs, null, null, sortOrder)
+        clone.setNotificationUri(context!!.contentResolver, uri)
+        return clone
+
     }
-    override fun getType(p0: Uri): String? {
-        TODO()
+    override fun getType(uri: Uri): String? {
+        return when (uriMatcher!!.match(uri)) {
+            uriCode -> "vnd.android.cursor.dir/vnd.com/revature.contentprovider.provider.user"
+            else -> throw IllegalArgumentException("Unsupported URI: $uri")
+        }
     }
     override fun insert(uri: Uri, values: ContentValues?): Uri {
         val rowID = db!!.insert(TABLE_NAME, "", values)
@@ -89,7 +110,6 @@ class RevatureContentProvider: ContentProvider() {
             context!!.contentResolver.notifyChange(_uri, null)
             return _uri
         }
-
         throw SQLiteException("Failed to add record into $uri")
     }
     override fun delete(p0: Uri, p1: String?, p2: Array<out String>?): Int {
@@ -101,8 +121,7 @@ class RevatureContentProvider: ContentProvider() {
 
     private var db: SQLiteDatabase? = null
 
-    private class DatabaseHelper
-    internal constructor(context: Context): SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+    private class DatabaseHelper(context: Context): SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
         override fun onCreate(db: SQLiteDatabase?) {
             db?.execSQL(CREATE_DB_TABLE)
         }
